@@ -1349,7 +1349,9 @@ function renderChapter() {
     wrap.className = 'write-verse-row';
     const ta = document.createElement('textarea');
     ta.className = 'write-input' + (isPsalms ? ' psalms' : '');
-    ta.rows = 1;
+    ta.rows = 3;
+ta.style.minHeight = '60px';
+ta.style.overflow = 'hidden';
     ta.placeholder = `${i + 1}절을 필사하세요…`;
     ta.value = savedDrafts[i] || '';
     ta.dataset.verse = i;
