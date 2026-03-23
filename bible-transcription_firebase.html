@@ -1,0 +1,1597 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>성경 필사 · 잠언 & 시편</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@300;400;600;700&family=Nanum+Myeongjo:wght@400;700&family=IM+Fell+English+SC&display=swap" rel="stylesheet">
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getAuth, signInWithPopup, signOut, GoogleAuthProvider, onAuthStateChanged }
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import { getFirestore, doc, getDoc, setDoc }
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  // ── Firebase 설정 ──
+  const firebaseConfig = {
+    apiKey: "AIzaSyAW4m2p_PsnC2u4wXWiiF3EXFr7XF-YLIE",
+    authDomain: "bible-writing-app.firebaseapp.com",
+    projectId: "bible-writing-app",
+    storageBucket: "bible-writing-app.firebasestorage.app",
+    messagingSenderId: "88942192892",
+    appId: "1:88942192892:web:389866b944fdbd9ede0f79"
+  };
+
+  const app  = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db   = getFirestore(app);
+  const provider = new GoogleAuthProvider();
+
+  let currentUser = null;
+
+  // ── 전역에 노출 ──
+  window._fbSignIn  = () => signInWithPopup(auth, provider);
+  window._fbSignOut = () => signOut(auth);
+
+  window._fbSave = async (state) => {
+    if (!currentUser) return;
+    await setDoc(doc(db, "users", currentUser.uid), { state: JSON.stringify(state) });
+  };
+
+  window._fbLoad = async () => {
+    if (!currentUser) return null;
+    const snap = await getDoc(doc(db, "users", currentUser.uid));
+    if (snap.exists()) {
+      try { return JSON.parse(snap.data().state); } catch { return null; }
+    }
+    return null;
+  };
+
+  // ── 인증 상태 감지 ──
+  onAuthStateChanged(auth, async (user) => {
+    currentUser = user;
+    if (user) {
+      // 로그인됨
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('appContainer').style.display = 'flex';
+      document.getElementById('userInfo').innerHTML =
+        `<img src="${user.photoURL}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;">` +
+        `<span style="font-size:12px;color:#a08060;">${user.displayName}</span>` +
+        `<button onclick="window._fbSignOut()" style="margin-left:10px;background:none;border:1px solid #3a2a1a;color:#5a4a32;font-size:11px;padding:3px 10px;cursor:pointer;font-family:'Noto Serif KR',serif;letter-spacing:1px;">로그아웃</button>`;
+      // 클라우드에서 데이터 불러오기
+      const cloudState = await window._fbLoad();
+      if (cloudState) {
+        window._initApp(cloudState);
+      } else {
+        window._initApp(null);
+      }
+    } else {
+      // 로그아웃됨
+      document.getElementById('loginScreen').style.display = 'flex';
+      document.getElementById('appContainer').style.display = 'none';
+    }
+  });
+</script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #1c1810;
+  --surface: #f7f2e8;
+  --surface2: #ede6d6;
+  --ink: #1e160a;
+  --ink2: #5a4a32;
+  --ink3: #a08060;
+  --divider: #d0c0a0;
+  --red: #7a1c1c;
+  --blue: #1a3558;
+  --gold: #c8960c;
+  --line: #ddd0b8;
+  --sidebar-w: 260px;
+}
+
+html, body { height: 100%; overflow: hidden; }
+
+body {
+  background: var(--bg);
+  font-family: 'Noto Serif KR', serif;
+  display: flex;
+  height: 100vh;
+}
+
+/* ══════════════ SIDEBAR ══════════════ */
+.sidebar {
+  width: var(--sidebar-w);
+  background: #120f09;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  border-right: 1px solid #2a2010;
+  overflow: hidden;
+}
+
+.sidebar-header {
+  padding: 20px 18px 16px;
+  border-bottom: 1px solid #2a2010;
+}
+
+.app-title {
+  font-family: 'IM Fell English SC', serif;
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: var(--gold);
+  margin-bottom: 4px;
+}
+
+.app-sub {
+  font-family: 'Nanum Myeongjo', serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: #f0e8d8;
+  letter-spacing: -0.5px;
+}
+
+/* Book tabs */
+.book-tabs {
+  display: flex;
+  border-bottom: 1px solid #2a2010;
+}
+
+.book-tab {
+  flex: 1;
+  padding: 10px 0;
+  background: none;
+  border: none;
+  font-family: 'Nanum Myeongjo', serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: #5a4a32;
+  cursor: pointer;
+  letter-spacing: 1px;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.book-tab::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 10%; right: 10%;
+  height: 2px;
+  transform: scaleX(0);
+  transition: transform 0.2s;
+}
+
+.book-tab.active { color: #f0e8d8; }
+.book-tab.active::after { transform: scaleX(1); }
+.book-tab.proverbs.active::after { background: var(--red); }
+.book-tab.psalms.active::after   { background: #4a7ab8; }
+
+/* Chapter list */
+.chapter-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.chapter-list::-webkit-scrollbar { width: 4px; }
+.chapter-list::-webkit-scrollbar-track { background: transparent; }
+.chapter-list::-webkit-scrollbar-thumb { background: #3a2a1a; border-radius: 2px; }
+
+.chapter-item {
+  display: flex;
+  align-items: center;
+  padding: 9px 18px;
+  cursor: pointer;
+  transition: background 0.15s;
+  gap: 10px;
+}
+
+.chapter-item:hover { background: rgba(255,255,255,0.04); }
+.chapter-item.active { background: rgba(255,255,255,0.08); }
+
+.chapter-num {
+  font-family: 'IM Fell English SC', serif;
+  font-size: 12px;
+  color: #5a4a32;
+  min-width: 28px;
+}
+
+.chapter-item.active .chapter-num { color: var(--gold); }
+
+.chapter-name {
+  font-size: 13px;
+  color: #8a7060;
+  flex: 1;
+}
+
+.chapter-item.active .chapter-name { color: #d8c8a8; }
+
+.chapter-done {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #2a2010;
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+
+.chapter-item[data-done="true"] .chapter-done { background: var(--gold); }
+
+/* Stats bar */
+.sidebar-stats {
+  padding: 12px 18px;
+  border-top: 1px solid #2a2010;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.stat-item { text-align: center; }
+.stat-num {
+  font-family: 'Nanum Myeongjo', serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--gold);
+  display: block;
+}
+.stat-label { font-size: 10px; color: #5a4a32; letter-spacing: 1px; }
+
+/* ══════════════ MAIN ══════════════ */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+/* Chapter header bar */
+.chapter-header {
+  background: var(--surface2);
+  border-bottom: 2px solid var(--divider);
+  padding: 14px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.chapter-title-block { display: flex; align-items: baseline; gap: 12px; }
+
+.chapter-label {
+  font-family: 'IM Fell English SC', serif;
+  font-size: 10px;
+  letter-spacing: 3px;
+  color: var(--red);
+}
+
+.chapter-label.psalms { color: #4a7ab8; }
+
+.chapter-full-title {
+  font-family: 'Nanum Myeongjo', serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.chapter-verse-count {
+  font-size: 12px;
+  color: var(--ink3);
+  letter-spacing: 1px;
+}
+
+.header-actions { display: flex; align-items: center; gap: 12px; }
+
+.nav-chap {
+  background: none;
+  border: 1px solid var(--divider);
+  color: var(--ink2);
+  font-family: 'Noto Serif KR', serif;
+  font-size: 12px;
+  padding: 5px 14px;
+  cursor: pointer;
+  letter-spacing: 1px;
+  transition: all 0.15s;
+}
+
+.nav-chap:hover:not(:disabled) { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.nav-chap:disabled { opacity: 0.3; cursor: default; }
+
+.complete-btn {
+  background: var(--ink);
+  color: var(--surface);
+  border: none;
+  font-family: 'Noto Serif KR', serif;
+  font-size: 12px;
+  padding: 7px 20px;
+  cursor: pointer;
+  letter-spacing: 2px;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+
+.complete-btn::before {
+  content: '';
+  position: absolute; inset: 0;
+  transform: translateX(-100%);
+  transition: transform 0.3s;
+}
+
+.complete-btn:hover::before { transform: translateX(0); }
+.complete-btn span { position: relative; z-index: 1; }
+
+.complete-btn.proverbs::before { background: var(--red); }
+.complete-btn.psalms::before   { background: #1a3558; }
+.complete-btn.done { background: var(--red); }
+.complete-btn.done.psalms { background: #1a3558; }
+.complete-btn:focus { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+/* ══════════════ SPLIT PANE ══════════════ */
+.split-pane {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* Left: original text */
+.pane-original {
+  width: 50%;
+  border-right: 2px solid var(--divider);
+  overflow-y: auto;
+  padding: 28px 32px;
+  background: var(--surface);
+}
+
+.pane-original::-webkit-scrollbar { width: 4px; }
+.pane-original::-webkit-scrollbar-track { background: transparent; }
+.pane-original::-webkit-scrollbar-thumb { background: var(--divider); border-radius: 2px; }
+
+.pane-label {
+  font-family: 'IM Fell English SC', serif;
+  font-size: 9px;
+  letter-spacing: 4px;
+  color: var(--ink3);
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pane-label::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+
+.verse-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 18px;
+  align-items: flex-start;
+  padding: 8px 10px;
+  border-radius: 2px;
+  transition: background 0.15s;
+}
+
+.verse-row:hover { background: rgba(0,0,0,0.03); }
+
+/* 필사 완료된 절 — 원문 표시 */
+.verse-row.typed .v-text {
+  color: var(--ink3);
+  transition: color 0.3s;
+}
+.verse-row.typed .v-num { opacity: 0.45; transition: opacity 0.3s; }
+
+.verse-row.typed-psalms .v-text {
+  color: #7a9ec0;
+  transition: color 0.3s;
+}
+.verse-row.typed-psalms .v-num { opacity: 0.45; transition: opacity 0.3s; }
+
+/* 현재 타이핑 중인 절 — 살짝 하이라이트 */
+.verse-row.active-verse {
+  background: rgba(184, 134, 11, 0.07);
+  border-left: 2px solid var(--gold);
+  padding-left: 8px;
+}
+
+.v-num {
+  font-family: 'Nanum Myeongjo', serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--red);
+  min-width: 28px;
+  padding-top: 3px;
+  text-align: right;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.v-num.psalms { color: #4a7ab8; }
+
+.v-text {
+  font-family: 'Nanum Myeongjo', serif;
+  font-size: 15px;
+  line-height: 1.9;
+  color: var(--ink);
+}
+
+/* Right: writing pane */
+.pane-writing {
+  width: 50%;
+  overflow-y: auto;
+  padding: 28px 32px;
+  background: #fdfaf4;
+}
+
+.pane-writing::-webkit-scrollbar { width: 4px; }
+.pane-writing::-webkit-scrollbar-track { background: transparent; }
+.pane-writing::-webkit-scrollbar-thumb { background: var(--divider); border-radius: 2px; }
+
+.write-verse-row {
+  margin-bottom: 18px;
+}
+
+.write-num {
+  font-family: 'Nanum Myeongjo', serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink3);
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+
+.write-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  outline: none;
+  font-family: 'Nanum Myeongjo', serif;
+  font-size: 15px;
+  line-height: 1.9;
+  color: var(--ink);
+  padding: 4px 2px 6px;
+  resize: none;
+  transition: border-color 0.2s;
+  caret-color: var(--red);
+  overflow: hidden;
+}
+
+.write-input:focus { border-bottom-color: var(--red); }
+.write-input.psalms:focus { border-bottom-color: #4a7ab8; }
+
+.write-input::placeholder { color: #c8b898; font-style: italic; }
+
+/* Reset button */
+.sidebar-reset {
+  padding: 10px 14px 14px;
+  border-top: 1px solid #2a2010;
+}
+
+.reset-btn {
+  width: 100%;
+  background: none;
+  border: 1px solid #3a2a1a;
+  color: #5a4a32;
+  font-family: 'Noto Serif KR', serif;
+  font-size: 11px;
+  padding: 7px 0;
+  cursor: pointer;
+  letter-spacing: 2px;
+  transition: all 0.2s;
+}
+
+.reset-btn:hover {
+  border-color: #8b2020;
+  color: #c07070;
+}
+
+/* Confirm modal */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 300;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.modal-overlay.show { opacity: 1; pointer-events: all; }
+
+.modal {
+  background: #1c1810;
+  border: 1px solid #3a2a1a;
+  padding: 32px 36px;
+  max-width: 340px;
+  width: 90%;
+  text-align: center;
+  transform: translateY(12px);
+  transition: transform 0.2s;
+}
+
+.modal-overlay.show .modal { transform: translateY(0); }
+
+.modal-icon { font-size: 28px; margin-bottom: 12px; }
+
+.modal-title {
+  font-family: 'Nanum Myeongjo', serif;
+  font-size: 17px;
+  font-weight: 700;
+  color: #f0e8d8;
+  margin-bottom: 8px;
+}
+
+.modal-desc {
+  font-size: 12px;
+  color: #5a4a32;
+  line-height: 1.7;
+  margin-bottom: 24px;
+  letter-spacing: 0.5px;
+}
+
+.modal-actions { display: flex; gap: 10px; justify-content: center; }
+
+.modal-btn {
+  font-family: 'Noto Serif KR', serif;
+  font-size: 12px;
+  padding: 8px 22px;
+  cursor: pointer;
+  letter-spacing: 1px;
+  border: none;
+  transition: all 0.15s;
+}
+
+.modal-btn.cancel {
+  background: none;
+  border: 1px solid #3a2a1a;
+  color: #5a4a32;
+}
+
+.modal-btn.cancel:hover { border-color: #5a4a32; color: #8a7060; }
+
+.modal-btn.confirm {
+  background: #8b2020;
+  color: #f0e8d8;
+}
+
+.modal-btn.confirm:hover { background: #a03030; }
+
+/* Sync scroll toggle */
+.sync-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--ink3);
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-box {
+  width: 14px; height: 14px;
+  border: 1px solid var(--divider);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px;
+  color: var(--red);
+  transition: all 0.2s;
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 28px; left: 50%;
+  transform: translateX(-50%) translateY(60px);
+  background: var(--ink);
+  color: var(--surface);
+  padding: 9px 22px;
+  font-family: 'Noto Serif KR', serif;
+  font-size: 12px;
+  letter-spacing: 1px;
+  transition: transform 0.3s ease;
+  z-index: 200;
+  pointer-events: none;
+}
+
+.toast.show { transform: translateX(-50%) translateY(0); }
+
+/* Empty state */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--ink3);
+  gap: 8px;
+}
+
+.empty-state .icon { font-size: 32px; opacity: 0.4; }
+.empty-state p { font-size: 13px; letter-spacing: 1px; }
+
+/* ── 로그인 화면 ── */
+#loginScreen {
+  position: fixed; inset: 0;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  gap: 20px;
+}
+.login-title {
+  font-family: 'IM Fell English SC', serif;
+  font-size: 13px;
+  letter-spacing: 4px;
+  color: var(--gold);
+  margin-bottom: 4px;
+}
+.login-sub {
+  font-family: 'Nanum Myeongjo', serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: #f0e8d8;
+  margin-bottom: 32px;
+}
+.login-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #f0e8d8;
+  border: none;
+  padding: 13px 28px;
+  cursor: pointer;
+  font-family: 'Noto Serif KR', serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e160a;
+  letter-spacing: 1px;
+  transition: background 0.2s;
+}
+.login-btn:hover { background: #fff; }
+.login-btn img { width: 20px; height: 20px; }
+.login-desc {
+  font-size: 12px;
+  color: #5a4a32;
+  letter-spacing: 1px;
+  margin-top: 8px;
+}
+#appContainer { display: none; width: 100%; height: 100%; }
+#userInfo {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .sidebar { width: 200px; }
+  :root { --sidebar-w: 200px; }
+  .pane-original, .pane-writing { padding: 18px 16px; }
+  .v-text, .write-input { font-size: 14px; }
+}
+
+@media (max-width: 560px) {
+  .sidebar { display: none; }
+  .split-pane { flex-direction: column; }
+  .pane-original { width: 100%; height: 40%; border-right: none; border-bottom: 2px solid var(--divider); }
+  .pane-writing { width: 100%; height: 60%; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── 로그인 화면 ── -->
+<div id="loginScreen">
+  <div class="login-title">개역개정</div>
+  <div class="login-sub">성경 필사</div>
+  <button class="login-btn" onclick="window._fbSignIn()">
+    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
+    Google 계정으로 시작하기
+  </button>
+  <div class="login-desc">로그인하면 어떤 기기에서도 필사 기록이 이어집니다</div>
+</div>
+
+<!-- ── 앱 본체 ── -->
+<div id="appContainer">
+
+<!-- ── SIDEBAR ── -->
+<div class="sidebar">
+  <div class="sidebar-header">
+    <div class="app-title">개역개정</div>
+    <div class="app-sub">성경 필사</div>
+  </div>
+
+  <div class="book-tabs">
+    <button class="book-tab proverbs active" onclick="setBook('proverbs')">잠언</button>
+    <button class="book-tab psalms"          onclick="setBook('psalms')">시편</button>
+  </div>
+
+  <div class="chapter-list" id="chapterList"></div>
+
+  <div class="sidebar-stats">
+    <div class="stat-item">
+      <span class="stat-num" id="statStreak">0</span>
+      <span class="stat-label">연속 일수</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-num" id="statDone">0</span>
+      <span class="stat-label">완료 장</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-num" id="statTotal">0</span>
+      <span class="stat-label">전체 장</span>
+    </div>
+  </div>
+  <div class="sidebar-reset">
+    <button class="reset-btn" onclick="confirmReset()">↺ 전체 초기화</button>
+  </div>
+</div>
+
+<!-- ── MAIN ── -->
+<div class="main">
+  <div class="chapter-header">
+    <div class="chapter-title-block">
+      <span class="chapter-label" id="chapLabel">PROVERBS</span>
+      <span class="chapter-full-title" id="chapTitle">잠언 1장</span>
+      <span class="chapter-verse-count" id="chapVerseCount"></span>
+    </div>
+    <div class="header-actions">
+      <div id="userInfo"></div>
+      <label class="sync-toggle" title="동시 스크롤">
+        <div class="toggle-box" id="syncBox">✓</div>
+        동시스크롤
+      </label>
+      <button class="nav-chap" id="prevChap" onclick="moveChapter(-1)">← 이전장</button>
+      <button class="nav-chap" id="nextChap" onclick="moveChapter(1)">다음장 →</button>
+      <button class="complete-btn proverbs" id="completeBtn" onclick="completeChapter()">
+        <span id="completeBtnText">장 완료</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="split-pane">
+    <!-- Original -->
+    <div class="pane-original" id="paneOriginal">
+      <div class="pane-label">원문</div>
+      <div id="originalVerses"></div>
+    </div>
+
+    <!-- Writing -->
+    <div class="pane-writing" id="paneWriting">
+      <div class="pane-label">필사</div>
+      <div id="writingVerses"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm reset modal -->
+<div class="modal-overlay" id="resetModal">
+  <div class="modal">
+    <div class="modal-icon">✦</div>
+    <div class="modal-title">전체 초기화</div>
+    <div class="modal-desc">모든 필사 기록과 완료 장이<br>삭제됩니다. 계속하시겠습니까?</div>
+    <div class="modal-actions">
+      <button class="modal-btn cancel" onclick="closeModal()">취소</button>
+      <button class="modal-btn confirm" onclick="doReset()">초기화</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+</div><!-- /appContainer -->
+
+<script>
+// ══════════════════════════════════════════════
+// BIBLE DATA  (개역개정 · 잠언 1~10장 / 시편 선별 장)
+// ══════════════════════════════════════════════
+const BIBLE = {
+  proverbs: [
+    { ch: 1, title: "잠언 1장", verses: [
+      "다윗의 아들 이스라엘 왕 솔로몬의 잠언이라",
+      "이는 지혜와 훈계를 알게 하며 명철의 말씀을 깨닫게 하며",
+      "지혜롭게, 공의롭게, 정의롭게, 정직하게 행할 일에 대하여 훈계를 받게 하며",
+      "어리석은 자를 슬기롭게 하며 젊은 자에게 지식과 근신함을 주기 위한 것이니",
+      "지혜 있는 자는 듣고 학식이 더할 것이요 명철한 자는 지략을 얻을 것이라",
+      "잠언과 비유와 지혜 있는 자의 말과 그 오묘한 말을 깨달으리라",
+      "여호와를 경외하는 것이 지식의 근본이거늘 미련한 자는 지혜와 훈계를 멸시하느니라",
+      "내 아들아 네 아버지의 훈계를 들으며 네 어머니의 법을 떠나지 말라",
+      "이는 네 머리의 아름다운 관이요 네 목의 금 사슬이니라",
+      "내 아들아 악한 자가 너를 꾈지라도 따르지 말라",
+      "그들이 말하기를 우리와 함께 가자 우리가 가만히 엎드렸다가 사람의 피를 흘리자 죄 없는 자를 까닭 없이 숨어 기다리다가",
+      "스올 같이 그들을 산 채로 삼키며 무덤에 내려가는 자들 같이 통째로 삼키자",
+      "우리가 온갖 보화를 얻으며 빼앗은 것으로 우리 집을 채우리니",
+      "너는 우리와 함께 제비를 뽑고 우리가 함께 전대 하나만 두자 할지라도",
+      "내 아들아 그들과 함께 길에 다니지 말라 네 발을 금하여 그 길을 밟지 말라",
+      "대저 그 발은 악으로 달려가며 피를 흘리는 데 빠름이니라",
+      "새가 보는 데서 그물을 치면 헛일이거늘",
+      "그들이 가만히 엎드림은 자기의 피를 흘릴 뿐이요 숨어 기다림은 자기의 생명을 해할 뿐이니",
+      "이익을 탐하는 자의 길은 다 이러하여 자기의 생명을 잃게 하느니라",
+      "지혜가 길거리에서 부르며 광장에서 소리를 높이며",
+      "시끄러운 길목에서 소리를 지르며 성문 어귀와 성중에서 그 소리를 발하여 이르되",
+      "너희 어리석은 자들은 어리석음을 좋아하며 거만한 자들은 거만을 기뻐하며 미련한 자들은 지식을 미워하니 어느 때까지 하겠느냐",
+      "나의 책망을 듣고 돌이키라 보라 내가 나의 영을 너희에게 부어 주며 내 말을 너희에게 알게 하리라",
+      "내가 불렀으나 너희가 듣기 싫어하였고 손을 폈으나 돌아보는 자가 없었고",
+      "도리어 나의 모든 교훈을 멸시하며 나의 책망을 받지 아니하였은즉",
+      "너희가 재앙을 만날 때에 내가 웃을 것이며 너희에게 두려움이 임할 때에 내가 비웃으리라",
+      "너희의 두려움이 광풍 같이 임하겠고 너희의 재앙이 폭풍 같이 이르겠고 너희에게 근심과 슬픔이 임하리니",
+      "그 때에 너희가 나를 부르리라 그래도 내가 대답하지 아니하겠고 부지런히 나를 찾으리라 그래도 나를 만나지 못하리니",
+      "너희가 지식을 미워하며 여호와 경외하기를 즐겨 하지 아니하며",
+      "나의 교훈을 받지 아니하고 나의 모든 책망을 업신여겼음이니라",
+      "그러므로 자기 행위의 열매를 먹으며 자기 꾀에 배부르리라",
+      "어리석은 자의 퇴보는 자기를 죽이며 미련한 자의 안일은 자기를 멸망시키려니와",
+      "오직 나를 듣는 자는 평안히 살며 재앙의 두려움이 없이 안전하리라",
+    ]},
+    { ch: 2, title: "잠언 2장", verses: [
+      "내 아들아 네가 만일 나의 말을 받으며 나의 계명을 네게 간직하며",
+      "네 귀를 지혜에 기울이며 네 마음을 명철에 두며",
+      "지식을 불러 구하며 명철을 얻으려고 소리를 높이며",
+      "은을 구하는 것 같이 그것을 구하며 감추어진 보배를 찾는 것 같이 그것을 찾으면",
+      "여호와 경외하기를 깨달으며 하나님을 알게 되리니",
+      "대저 여호와는 지혜를 주시며 지식과 명철을 그 입에서 내심이며",
+      "그는 정직한 자를 위하여 완전한 지혜를 예비하시며 행실이 온전한 자에게 방패가 되시나니",
+      "대저 그는 정의의 길을 보호하시며 그의 성도들의 길을 보전하려 하심이니라",
+      "그런즉 네가 공의와 정의와 정직 곧 모든 선한 길을 깨달을 것이라",
+      "곧 지혜가 네 마음에 들어가며 지식이 네 영혼을 즐겁게 할 것이요",
+      "근신이 너를 지키며 명철이 너를 보호하여",
+      "악한 자의 길과 패역을 말하는 자에게서 건져 내리라",
+      "이 무리는 정직한 길을 떠나 어두운 길로 행하며",
+      "행악하기를 기뻐하며 악인의 패역을 즐거워하나니",
+      "그 길은 구부러지고 그 행위는 패역하니라",
+      "이것이 또 너를 음녀에게서, 말로 호리는 이방 계집에게서 구원하리니",
+      "그는 젊은 시절의 짝을 버리며 그의 하나님의 언약을 잊어버린 자라",
+      "그의 집은 사망으로, 그의 길은 스올로 기울어졌나니",
+      "누구든지 그에게로 가는 자는 돌아오지 못하며 또 생명 길을 얻지 못하느니라",
+      "지혜가 너를 선한 자의 길로 행하게 하며 또 의인의 길을 지키게 하리니",
+      "대저 정직한 자는 땅에 거하며 완전한 자는 땅에 남아 있으리라",
+      "그러나 악인은 땅에서 끊어지겠고 간사한 자는 땅에서 뽑히리라",
+    ]},
+    { ch: 3, title: "잠언 3장", verses: [
+      "내 아들아 나의 법을 잊어버리지 말고 네 마음으로 나의 명령을 지키라",
+      "그리하면 그것이 네가 장수하여 많은 해를 누리게 하며 평강을 더하게 하리라",
+      "인자와 진리가 네게서 떠나지 말게 하고 그것을 네 목에 매며 네 마음판에 새기라",
+      "그리하면 네가 하나님과 사람 앞에서 은총과 귀중히 여김을 받으리라",
+      "너는 마음을 다하여 여호와를 신뢰하고 네 명철을 의지하지 말라",
+      "너는 범사에 그를 인정하라 그리하면 네 길을 지도하시리라",
+      "스스로 지혜롭게 여기지 말지어다 여호와를 경외하며 악을 떠날지어다",
+      "이것이 네 몸에 양약이 되어 네 골수를 윤택하게 하리라",
+      "네 재물과 네 소산물의 처음 익은 열매로 여호와를 공경하라",
+      "그리하면 네 창고가 가득히 차고 네 포도즙 틀에 새 포도즙이 넘치리라",
+      "내 아들아 여호와의 징계를 경히 여기지 말라 그 꾸지람을 싫어하지 말라",
+      "대저 여호와께서 그 사랑하시는 자를 징계하시기를 마치 아비가 그 기뻐하는 아들을 징계함 같이 하시느니라",
+      "지혜를 얻은 자와 명철을 얻은 자는 복이 있나니",
+      "이는 지혜를 얻는 것이 은을 얻는 것보다 낫고 그 이익이 정금보다 나음이니라",
+      "지혜는 진주보다 귀하니 네가 사모하는 모든 것으로도 이에 비교할 수 없도다",
+      "그의 오른손에는 장수가 있고 그의 왼손에는 부귀가 있나니",
+      "그 길은 즐거운 길이요 그의 지름길은 다 평강이니라",
+      "지혜는 그 얻은 자에게 생명 나무라 지혜를 가진 자는 복되도다",
+      "여호와께서는 지혜로 땅에 터를 놓으셨으며 명철로 하늘을 견고히 세우셨고",
+      "그의 지식으로 깊은 바다를 갈라지게 하셨으며 공중에서 이슬이 내리게 하셨느니라",
+      "내 아들아 완전한 지혜와 근신을 지키고 이것들이 네 눈 앞에서 떠나지 말게 하라",
+      "그리하면 그것이 네 영혼의 생명이 되며 네 목에 장식이 되리니",
+      "네가 네 길을 평안히 행하겠고 네 발이 거치지 아니하겠으며",
+      "네가 누울 때에 두려워하지 아니하겠고 네가 누운즉 네 잠이 달리로다",
+      "너는 갑작스러운 두려움도 악인에게 닥치는 멸망도 두려워하지 말라",
+      "대저 여호와는 네가 의지할 이시니라 그가 네 발을 지켜 걸리지 않게 하시리라",
+      "네 손이 선을 베풀 힘이 있거든 마땅히 받을 자에게 베풀기를 아끼지 말며",
+      "네게 있거든 이웃에게 이르기를 갔다가 다시 오라 내일 주겠노라 하지 말며",
+      "네 이웃이 네 곁에서 평안히 살거든 그를 해하려고 꾀하지 말며",
+      "사람이 네게 악을 행하지 아니하였거든 까닭 없이 더불어 다투지 말며",
+      "포악한 자를 부러워하지 말며 그의 어떤 행위도 따르지 말라",
+      "대저 패역한 자는 여호와께서 미워하시나 정직한 자에게는 그의 교통하심이 있으며",
+      "악인의 집에는 여호와의 저주가 있거니와 의인의 집에는 복이 있느니라",
+      "진실로 그는 거만한 자를 비웃으시며 겸손한 자에게 은혜를 베푸시나니",
+      "지혜로운 자는 영광을 기업으로 받거니와 미련한 자의 영달함은 수치가 되느니라",
+    ]},
+    { ch: 4, title: "잠언 4장", verses: [
+      "아들들아 아버지의 훈계를 들으며 명철을 얻기에 주의하라",
+      "내가 선한 도리를 너희에게 전하노니 내 법을 떠나지 말라",
+      "나도 내 아버지에게 아들이었으며 내 어머니 보기에 유약한 외아들이었노라",
+      "아버지가 내게 가르쳐 이르기를 내 말을 네 마음에 두라 내 명령을 지키라 그리하면 살리라",
+      "지혜를 얻으며 명철을 얻으라 내 입의 말을 잊지 말며 어기지 말라",
+      "지혜를 버리지 말라 그가 너를 보호하리라 그를 사랑하라 그가 너를 지키리라",
+      "지혜가 제일이니 지혜를 얻으라 네가 얻은 모든 것을 가지고 명철을 얻을지니라",
+      "그것을 높이 여기라 그리하면 그것이 너를 높이 들리라 만일 그것을 품으면 그것이 너를 영화롭게 하리라",
+      "그것이 아름다운 관을 네 머리에 두겠고 영화로운 면류관을 네게 주리라 하셨느니라",
+      "내 아들아 들으라 내 말을 받으라 그리하면 네 생명의 해가 길리라",
+      "내가 지혜로운 길을 네게 가르쳤으며 정직한 첩경으로 너를 인도하였은즉",
+      "다닐 때에 네 걸음이 곤란하지 아니하겠고 달려갈 때에 실족하지 아니하리라",
+      "훈계를 굳게 잡아 놓치지 말고 지키라 이것이 네 생명이니라",
+      "사악한 자의 길에 들어가지 말며 악인의 길로 다니지 말지어다",
+      "그 길을 피하고 지나가지 말며 돌이켜 떠나갈지어다",
+      "그들은 악을 행하지 못하면 자지 못하며 사람을 넘어뜨리지 못하면 잠이 오지 아니하며",
+      "불의의 떡을 먹으며 강포의 술을 마심이니라",
+      "의인의 길은 돋는 햇살 같아서 크게 빛나 한낮의 광명에 이르거니와",
+      "악인의 길은 어둠 같아서 그가 걸려 넘어져도 그것이 무엇인지 깨닫지 못하느니라",
+      "내 아들아 내 말에 주의하며 내가 말하는 것에 네 귀를 기울이라",
+      "그것을 네 눈에서 떠나게 하지 말며 네 마음 속에 지키라",
+      "그것은 얻는 자에게 생명이 되며 그의 온 육체의 건강이 됨이니라",
+      "모든 지킬 만한 것 중에 더욱 네 마음을 지키라 생명의 근원이 이에서 남이니라",
+      "구부러진 말을 네 입에서 버리며 비뚤어진 말을 네 입술에서 멀리 하라",
+      "네 눈은 바로 보며 네 눈꺼풀은 네 앞을 곧게 살펴",
+      "네 발이 행할 길을 평탄하게 하며 네 모든 길을 든든히 하라",
+      "좌로나 우로나 치우치지 말고 네 발을 악에서 떠나게 하라",
+    ]},
+    { ch: 5, title: "잠언 5장", verses: [
+      "내 아들아 내 지혜에 주의하며 내 명철에 네 귀를 기울여서",
+      "근신을 지키며 네 입술로 지식을 지키도록 하라",
+      "대저 음녀의 입술은 꿀을 떨어뜨리며 그의 입은 기름보다 미끄러우나",
+      "나중은 쑥 같이 쓰고 두 날 가진 칼 같이 날카로우며",
+      "그의 발은 사지로 내려가며 그의 걸음은 스올로 나아가나니",
+      "그는 생명의 평탄한 길을 찾지 못하며 자기 길이 불안정하여도 그것을 깨닫지 못하느니라",
+      "그런즉 아들들아 나에게 들으며 내 입의 말을 버리지 말고",
+      "네 길을 그에게서 멀리 하라 그의 집 문에도 가까이 가지 말라",
+      "두렵건대 네 존영이 남에게 잃어버리게 되며 네 수한이 잔인한 자에게 빼앗기게 될까 하노라",
+      "두렵건대 타인이 네 재물로 충족하게 되며 네 수고한 것이 외인의 집에 있게 될까 하노라",
+      "두렵건대 마지막에 이르러 네 몸, 네 육체가 쇠약할 때에 네가 한탄하여",
+      "말하기를 내가 어찌하여 훈계를 싫어하며 내 마음이 꾸지람을 가벼이 여기고",
+      "내 선생의 목소리를 청종하지 아니하며 나를 가르치는 이에게 귀를 기울이지 아니하였던고",
+      "많은 무리들이 모인 중에서 큰 악에 빠지게 되었노라 하게 될까 염려하노라",
+      "너는 네 샘에서 물을 마시며 네 우물에서 흐르는 물을 마시라",
+      "어찌하여 네 샘물을 집 밖으로 넘치게 하며 네 도랑물을 거리로 흘러가게 하겠느냐",
+      "그 물이 네게만 있게 하고 타인과 함께 그것을 나누지 말라",
+      "네 샘으로 복되게 하라 네가 젊어서 취한 아내를 즐거워하라",
+      "그는 사랑스러운 암사슴 같고 아름다운 암노루 같으니 너는 그의 품을 항상 족하게 여기며 그의 사랑을 항상 연모하라",
+      "내 아들아 어찌하여 음녀를 연모하겠으며 어찌하여 이방 계집의 가슴을 안겠느냐",
+      "대저 사람의 길은 여호와의 눈 앞에 있으며 그가 그 사람의 모든 길을 평탄하게 하시느니라",
+      "악인은 자기의 악에 걸리며 그 죄의 줄에 매이나니",
+      "그는 훈계를 받지 아니함으로 말미암아 죽겠고 심히 미련함으로 말미암아 혼미하게 되느니라",
+    ]},
+    { ch: 6, title: "잠언 6장", verses: [
+      "내 아들아 네가 만일 이웃을 위하여 담보하며 타인을 위하여 보증하였으면",
+      "네 입의 말로 네가 얽혔으며 네 입의 말로 인하여 잡히게 되었느니라",
+      "내 아들아 네가 네 이웃의 손에 빠졌은즉 이같이 하라 너는 곧 가서 겸손히 네 이웃에게 간구하여 스스로 구원하되",
+      "네 눈을 잠들게 하지 말며 눈꺼풀을 감기게 하지 말고",
+      "노루가 사냥꾼의 손에서 벗어나는 것 같이, 새가 그물 치는 자의 손에서 벗어나는 것 같이 스스로 구원하라",
+      "게으른 자여 개미에게 가서 그가 하는 것을 보고 지혜를 얻으라",
+      "개미는 두령도 없고 감독자도 없고 통치자도 없으되",
+      "먹을 것을 여름 동안에 준비하며 추수 때에 양식을 모으느니라",
+      "게으른 자여 네가 어느 때까지 누워 있겠느냐 네가 어느 때에 잠이 깨어 일어나겠느냐",
+      "좀더 자자, 좀더 졸자, 손을 모으고 좀더 누워 있자 하면",
+      "네 빈궁이 강도 같이 오며 네 곤핍이 군사 같이 이르리라",
+      "불량하고 악한 자는 구부러진 말을 하고 다니며",
+      "눈짓을 하며 발로 뜻을 보이며 손가락질을 하며",
+      "그의 마음에 패역함이 있으며 항상 악을 꾀하여 다툼을 일으키는 자라",
+      "그러므로 그의 재앙이 갑자기 내리리니 홀연히 상하여 회복하지 못하리라",
+      "여호와께서 미워하시는 것 곧 그의 마음에 싫어하시는 것이 예닐곱 가지이니",
+      "곧 교만한 눈과 거짓된 혀와 무죄한 자의 피를 흘리는 손과",
+      "악한 계교를 꾀하는 마음과 빨리 악으로 달려가는 발과",
+      "거짓을 말하는 망령된 증인과 및 형제 사이를 이간하는 자이니라",
+      "내 아들아 네 아버지의 명령을 지키며 네 어머니의 법을 떠나지 말고",
+      "그것을 항상 네 마음에 새기며 네 목에 매라",
+      "그것이 네가 다닐 때에 너를 인도하며 네가 잘 때에 너를 보호하며 네가 깰 때에 너와 더불어 말하리니",
+      "대저 명령은 등불이요 법은 빛이요 훈계의 책망은 곧 생명의 길이라",
+      "이것이 너를 지켜서 악한 여인에게, 이방 여인의 혀로 호리는 것에 빠지지 않게 하리라",
+      "네 마음에 그의 아름다움을 탐하지 말며 그 눈꺼풀에 혹하지 말라",
+      "음녀로 말미암아 사람이 한 조각 떡만 남게 됨이여 음란한 여인은 귀한 생명을 사냥하느니라",
+      "사람이 불을 품에 품으면 어찌 그의 옷이 타지 아니하겠으며",
+      "사람이 숯불 위를 걸으면 어찌 그의 발이 타지 아니하겠느냐",
+      "남의 아내와 통간하는 자도 이와 같을 것이라 그를 만지는 자는 죄 없게 되지 못하리라",
+      "도둑이 주릴 때에 배를 채우려고 도둑질하면 사람이 그를 멸시하지는 아니하려니와",
+      "들키면 칠 배를 갚아야 하리니 심지어 자기 집에 있는 것을 다 내어주게 되리라",
+      "부녀와 간음하는 자는 무지한 자라 이것을 행하는 자는 자기의 영혼을 망하게 하며",
+      "상함과 능욕을 받고 부끄러움을 씻을 수 없게 되나니",
+      "남편이 투기로 분노하여 원수를 갚는 날에 용서하지 아니하고",
+      "아무 보상도 받지 아니하며 많은 선물을 줄지라도 듣지 아니하리라",
+    ]},
+    { ch: 7, title: "잠언 7장", verses: [
+      "내 아들아 내 말을 지키며 내 명령을 네게 간직하라",
+      "내 명령을 지켜 살며 내 법을 네 눈동자처럼 지키라",
+      "이것을 네 손가락에 매며 이것을 네 마음판에 새기라",
+      "지혜에게 너는 내 누이라 하며 명철에게 너는 내 친족이라 하라",
+      "그리하면 이것이 너를 지켜서 음녀에게, 말로 호리는 이방 여인에게 빠지지 않게 하리라",
+      "내가 내 집 들창으로, 살창으로 내다 보다가",
+      "어리석은 자들 중에, 젊은이들 중에 한 지혜 없는 자를 보았노라",
+      "그가 거리를 지나 음녀의 골목 모퉁이로 가까이 하여 그의 집 쪽으로 걸어가는데",
+      "황혼 때, 저녁, 어두운 밤이라",
+      "그 때에 음녀가 그를 맞으니 그는 창녀의 옷을 입고 간교한 마음을 품었으며",
+      "그는 떠들며 완악하며 그의 발이 집에 머물지 아니하여",
+      "어떤 때는 거리에, 어떤 때는 광장에서, 또 어떤 때는 모든 골목 어귀에서 서서 기다리는 자라",
+      "그가 그를 붙잡고 입을 맞추며 부끄러움을 모르는 얼굴로 그에게 말하되",
+      "내가 화목제를 드리고 서원을 갚았노라",
+      "이러므로 내가 너를 맞으려고 나와서 네 얼굴을 찾다가 너를 만났도다",
+      "내 침상에는 요와 애굽의 무늬 있는 이불을 폈고",
+      "몰약과 침향과 계피를 뿌렸노라",
+      "오라 우리가 아침까지 흡족하게 서로 사랑하며 사랑함으로 희락하자",
+      "남편은 집을 떠나 먼 길을 갔는데",
+      "은 주머니를 가지고 보름 날에나 집에 돌아오리라 하여",
+      "여러 가지 고운 말로 그를 꾀어 부드러운 입술로 그를 격동하니",
+      "젊은이가 곧 그를 따랐으니 소가 도수장으로 가는 것 같고 미련한 자가 벌을 받으러 가려고 쇠고랑에 채이는 것 같도다",
+      "마침내 화살이 그의 간을 뚫게 되리라 새가 빨리 그물로 들어가되 자기의 생명을 잃어버릴 줄을 알지 못함과 같으니라",
+      "아들들아 이제 내 말을 듣고 내 입의 말에 주의하라",
+      "네 마음이 음녀의 길로 치우치지 말며 그 길에 미혹되지 말지어다",
+      "대저 그가 많은 사람을 상하여 쓰러지게 하였나니 그에게 죽은 자가 허다하니라",
+      "그의 집은 스올의 길이라 사망의 방으로 내려가느니라",
+    ]},
+    { ch: 8, title: "잠언 8장", verses: [
+      "지혜가 부르지 아니하느냐 명철이 소리를 높이지 아니하느냐",
+      "그가 길 가의 높은 곳과 사거리에 서며",
+      "성문 곁과 문 어귀와 여러 출입하는 문에서 불러 이르되",
+      "사람들아 내가 너희를 부르며 내가 인자들에게 소리를 높이노라",
+      "어리석은 자들아 너희는 명철할지니라 미련한 자들아 너희는 마음이 밝을지니라",
+      "너희는 들을지어다 내가 가장 선한 것을 말하리라 내 입술을 열어 정직을 내리라",
+      "내 입은 진리를 말하며 내 입술은 악을 미워하느니라",
+      "내 입의 말은 다 의로운즉 그 가운데에 굽은 것과 패역한 것이 없나니",
+      "이는 다 총명 있는 자가 밝히 아는 바요 지식 얻은 자가 정직하게 여기는 바니라",
+      "너희가 은을 받지 말고 나의 훈계를 받으며 정금보다 지식을 얻으라",
+      "대저 지혜는 진주보다 나으므로 원하는 모든 것을 이에 비교할 수 없음이니라",
+      "나 지혜는 명철로 주소를 삼으며 지식과 근신을 찾아 얻나니",
+      "여호와를 경외하는 것은 악을 미워하는 것이라 나는 교만과 거만과 악한 행실과 패역한 입을 미워하느니라",
+      "내게는 계략과 참 지식이 있으며 나는 명철이라 내게 능력이 있으므로",
+      "나로 말미암아 왕들이 치리하며 방백들이 공의를 세우며",
+      "나로 말미암아 재상과 존귀한 자 곧 세상의 모든 재판관들이 다스리느니라",
+      "나를 사랑하는 자들이 나의 사랑을 입으며 나를 간절히 찾는 자가 나를 만날 것이니라",
+      "부귀가 내게 있고 장구한 재물과 공의도 그러하니라",
+      "내 열매는 금이나 정금보다 나으며 내 소득은 순은보다 나으니라",
+      "나는 공의로운 길로 행하며 정의로운 길 가운데로 다니나니",
+      "이는 나를 사랑하는 자가 재물을 얻어서 그 곳간에 채우게 하려 함이니라",
+      "여호와께서 그 조화의 시작 곧 태초에 일하시기 전에 나를 가지셨으며",
+      "만세 전부터, 태초부터, 땅이 생기기 전부터 내가 세움을 받았나니",
+      "아직 바다가 생기지 아니하였고 큰 샘들이 있기 전에 내가 이미 났으며",
+      "산이 세워지기 전에, 언덕이 생기기 전에 내가 이미 났으니",
+      "하나님이 아직 땅도, 들도, 세상 진토의 근원도 짓지 아니하셨을 때에라",
+      "그가 하늘을 지으시며 궁창을 해면에 두르실 때에 내가 거기 있었고",
+      "그가 위로 구름 하늘을 견고하게 하시며 바다의 샘들을 힘 있게 하시며",
+      "바다의 한계를 정하여 물이 명령을 거스르지 못하게 하시며 또 땅의 기초를 정하실 때에",
+      "내가 그 곁에 있어서 창조자가 되어 날마다 그의 기뻐하신 바가 되었으며 항상 그 앞에서 즐거워하였으며",
+      "사람이 거처할 땅에서 즐거워하며 인자들을 기뻐하였느니라",
+      "아들들아 이제 내게 들으라 내 도를 지키는 자가 복이 있느니라",
+      "훈계를 들어서 지혜를 얻으라 그것을 버리지 말라",
+      "누구든지 내 문 곁에서 날마다 기다리며 문설주 옆에서 기다리는 자는 복이 있나니",
+      "대저 나를 얻는 자는 생명을 얻고 여호와께 은총을 얻을 것임이니라",
+      "그러나 나를 잃는 자는 자기의 영혼을 해하는 자라 나를 미워하는 자는 사망을 사랑하느니라",
+    ]},
+    { ch: 9, title: "잠언 9장", verses: [
+      "지혜가 그의 집을 짓고 일곱 기둥을 다듬고",
+      "짐승을 잡으며 포도주를 혼합하여 상을 베풀었으며",
+      "그의 여종들을 보내어 성중 높은 곳에서 불러 이르기를",
+      "어리석은 자는 이리로 돌이키라 하며 또 지혜 없는 자에게 이르기를",
+      "너는 와서 내 식물을 먹으며 내 혼합한 포도주를 마시고",
+      "어리석음을 버리고 생명을 얻으라 명철의 길을 행하라 하느니라",
+      "거만한 자를 경계하는 자는 도리어 능욕을 받고 악인을 책망하는 자는 도리어 흠이 잡히느니라",
+      "거만한 자를 책망하지 말라 그가 너를 미워할까 두려우니라 지혜 있는 자를 책망하라 그가 너를 사랑하리라",
+      "지혜 있는 자에게 교훈을 더하라 그가 더욱 지혜로워질 것이요 의로운 사람을 가르치라 그의 학식이 더하리라",
+      "여호와를 경외하는 것이 지혜의 근본이요 거룩하신 자를 아는 것이 명철이니라",
+      "나 지혜로 말미암아 네 날이 많아질 것이요 네 생명의 해가 네게 더하리라",
+      "네가 만일 지혜로우면 그 지혜가 네게 유익할 것이나 네가 만일 거만하면 너 홀로 해를 당하리라",
+      "어리석은 여인이 떠들며 어리석어서 아무것도 모르고",
+      "자기 집 문에 앉으며 성읍 높은 곳에 있는 자리에 앉아서",
+      "자기 길을 바로 가는 행인들을 불러 이르되",
+      "어리석은 자는 이리로 돌이키라 하며 지혜 없는 자에게 이르기를",
+      "도둑질한 물이 달고 몰래 먹는 떡이 맛있다 하는도다",
+      "오직 그 어리석은 자는 죽은 자들이 거기 있는 것과 그의 객들이 스올 깊은 곳에 있는 것을 알지 못하느니라",
+    ]},
+    { ch: 10, title: "잠언 10장", verses: [
+      "지혜로운 아들은 아비를 기쁘게 하거니와 미련한 아들은 어미의 근심이니라",
+      "불의의 재물은 무익하여도 공의는 죽음에서 건지느니라",
+      "여호와께서 의인의 영혼은 주리지 않게 하시나 악인의 소욕은 물리치시느니라",
+      "손을 게으르게 놀리는 자는 가난하게 되고 손이 부지런한 자는 부하게 되느니라",
+      "여름에 거두는 자는 지혜로운 아들이나 추수 때에 자는 자는 부끄러움을 끼치는 아들이니라",
+      "의인의 머리에는 복이 임하거니와 악인의 입은 독을 머금었느니라",
+      "의인을 기념할 때에는 칭찬하거니와 악인의 이름은 썩으리라",
+      "마음이 지혜로운 자는 명령을 받거니와 입이 미련한 자는 패망하리라",
+      "바른 길로 행하는 자는 걸음이 평안하려니와 굽은 길로 행하는 자는 드러나리라",
+      "눈짓하는 자는 근심을 끼치고 입이 미련한 자는 패망하느니라",
+      "의인의 입은 생명의 샘이어도 악인의 입은 독을 머금었느니라",
+      "미움은 다툼을 일으켜도 사랑은 모든 허물을 가리느니라",
+      "명철한 자의 입술에는 지혜가 있어도 지혜 없는 자의 등을 위해서는 채찍이 있느니라",
+      "지혜로운 자는 지식을 간직하거니와 미련한 자의 입은 멸망에 가까우니라",
+      "부자의 재물은 그의 견고한 성이요 가난한 자의 궁핍은 그의 패망이니라",
+      "의인의 수고는 생명에 이르고 악인의 소득은 죄에 이르느니라",
+      "훈계를 지키는 자는 생명 길로 행하여도 징계를 버리는 자는 그릇 가느니라",
+      "미움을 감추는 자는 거짓된 입술을 가진 자요 중상하는 자는 미련한 자니라",
+      "말이 많으면 허물을 면하기 어려우나 그 입술을 제어하는 자는 지혜가 있느니라",
+      "의인의 혀는 순은과 같거니와 악인의 마음은 가치가 없느니라",
+      "의인의 입술은 여러 사람을 교육하나 미련한 자는 지식이 없어 죽느니라",
+      "여호와께서 주시는 복은 사람을 부하게 하고 근심을 겸하여 주지 아니하시느니라",
+      "미련한 자는 행악으로 낙을 삼는 것 같이 명철한 자는 지혜로 낙을 삼느니라",
+      "악인에게는 그의 두려워하는 것이 임하거니와 의인의 소원은 이루어지느니라",
+      "회오리바람이 지나가면 악인은 없어져도 의인은 영원한 기초 같으니라",
+      "게으른 자는 그 부리는 사람에게 마치 이에 식초 같고 눈에 연기 같으니라",
+      "여호와를 경외하면 장수하느니라 그러나 악인의 수명은 짧아지느니라",
+      "의인의 소망은 즐거움을 이루어도 악인의 소망은 끊어지느니라",
+      "여호와의 도가 순전한 자에게는 산성이요 행악하는 자에게는 멸망이니라",
+      "의인은 영원히 이동되지 아니하여도 악인은 땅에 거하지 못하게 되느니라",
+      "의인의 입은 지혜를 내어도 패역한 혀는 베임을 당하리라",
+      "의인의 입술은 기쁘게 할 것을 알거니와 악인의 입은 패역을 말하느니라",
+    ]},
+  ],
+  psalms: [
+    { ch: 1, title: "시편 1편", verses: [
+      "복 있는 사람은 악인들의 꾀를 따르지 아니하며 죄인들의 길에 서지 아니하며 오만한 자들의 자리에 앉지 아니하고",
+      "오직 여호와의 율법을 즐거워하여 그의 율법을 주야로 묵상하는도다",
+      "그는 시냇가에 심은 나무가 철을 따라 열매를 맺으며 그 잎사귀가 마르지 아니함 같으니 그가 하는 모든 일이 다 형통하리로다",
+      "악인들은 그렇지 아니함이여 오직 바람에 나는 겨와 같도다",
+      "그러므로 악인들은 심판을 견디지 못하며 죄인들이 의인들의 모임에 들지 못하리로다",
+      "무릇 의인들의 길은 여호와께서 인정하시나 악인들의 길은 망하리로다",
+    ]},
+    { ch: 23, title: "시편 23편", verses: [
+      "여호와는 나의 목자시니 내게 부족함이 없으리로다",
+      "그가 나를 푸른 풀밭에 누이시며 쉴 만한 물 가로 인도하시는도다",
+      "내 영혼을 소생시키시고 자기 이름을 위하여 의의 길로 인도하시는도다",
+      "내가 사망의 음침한 골짜기로 다닐지라도 해를 두려워하지 않을 것은 주께서 나와 함께 하심이라 주의 지팡이와 막대기가 나를 안위하시나이다",
+      "주께서 내 원수의 목전에서 내게 상을 차려 주시고 기름을 내 머리에 부으셨으니 내 잔이 넘치나이다",
+      "내 평생에 선하심과 인자하심이 반드시 나를 따르리니 내가 여호와의 집에 영원히 살리로다",
+    ]},
+    { ch: 27, title: "시편 27편", verses: [
+      "여호와는 나의 빛이요 나의 구원이시니 내가 누구를 두려워하리요 여호와는 내 생명의 능력이시니 내가 누구를 무서워하리요",
+      "악인들이 내 살을 먹으려고 내게로 왔다가 나의 대적들과 나의 원수들인 그들이 실족하여 넘어졌도다",
+      "군대가 나를 대적하여 진 칠지라도 내 마음이 두렵지 아니하며 전쟁이 일어나 나를 치려 할지라도 나는 여전히 태연하리로다",
+      "내가 여호와께 바라는 한 가지 일 그것을 구하리니 곧 내가 내 평생에 여호와의 집에 살면서 여호와의 아름다움을 바라보며 그의 성전에서 사모하는 그것이라",
+      "여호와께서 환난 날에 나를 그의 초막 속에 비밀히 지키시고 그의 장막 은밀한 곳에 나를 숨기시며 높은 바위 위에 두시리로다",
+      "이제 내 머리가 나를 둘러싼 내 원수 위에 들리리니 내가 그의 장막에서 즐거운 제사를 드리겠고 노래하며 여호와를 찬송하리로다",
+      "여호와여 내가 소리를 높여 부르짖을 때에 들으시고 또한 나를 긍휼히 여기사 응답하소서",
+      "너희는 내 얼굴을 찾으라 하실 때에 내가 마음으로 주께 말하되 여호와여 내가 주의 얼굴을 찾으리이다 하였나이다",
+      "주의 얼굴을 내게서 숨기지 마시고 주의 종을 노하여 버리지 마소서 주는 나의 도움이 되셨나이다 나의 구원의 하나님이시여 나를 버리지 말고 떠나지 마소서",
+      "내 부모는 나를 버렸으나 여호와는 나를 영접하시리이다",
+      "여호와여 주의 길을 내게 가르치시고 내 원수들로 말미암아 평탄한 길로 인도하소서",
+      "내 생명을 내 대적의 뜻에 맡기지 마소서 위증자와 불의를 토하는 자가 일어나 나를 치려 함이니이다",
+      "내가 여호와의 선하심을 이 땅에서 보게 될 것을 확신하지 못하였더라면 낙심하였으리이다",
+      "너는 여호와를 바라라 강하고 담대하며 여호와를 바라라",
+    ]},
+    { ch: 46, title: "시편 46편", verses: [
+      "하나님은 우리의 피난처시요 힘이시니 환난 중에 만날 큰 도움이시라",
+      "그러므로 땅이 변하든지 산이 흔들려 바다 가운데에 빠지든지",
+      "바닷물이 솟아나고 뛰놀든지 그것이 넘침으로 산이 흔들릴지라도 우리는 두려워하지 아니하리로다 (셀라)",
+      "한 시내가 있어 나뉘어 흘러 하나님의 성 곧 지존하신 이의 성소를 기쁘게 하도다",
+      "하나님이 그 성 중에 계시매 성이 흔들리지 아니할 것이라 새벽에 하나님이 도우시리로다",
+      "뭇 나라가 떠들며 왕국이 흔들렸더니 그가 소리를 내시매 땅이 녹았도다",
+      "만군의 여호와께서 우리와 함께 하시니 야곱의 하나님은 우리의 피난처시로다 (셀라)",
+      "와서 여호와의 행적을 볼지어다 그가 땅을 황폐하게 하셨도다",
+      "그가 땅 끝까지 전쟁을 쉬게 하심이여 활을 꺾고 창을 끊으며 수레를 불사르시는도다",
+      "이르시기를 너희는 가만히 있어 내가 하나님 됨을 알지어다 내가 뭇 나라 중에서 높임을 받으리라 내가 세계 중에서 높임을 받으리라 하시도다",
+      "만군의 여호와께서 우리와 함께 하시니 야곱의 하나님은 우리의 피난처시로다 (셀라)",
+    ]},
+    { ch: 91, title: "시편 91편", verses: [
+      "지존자의 은밀한 곳에 거주하며 전능자의 그늘 아래에 사는 자여",
+      "나는 여호와를 향하여 말하기를 그는 나의 피난처요 나의 요새요 내가 의뢰하는 하나님이라 하리니",
+      "이는 그가 너를 새 사냥꾼의 올무에서와 심한 전염병에서 건지실 것임이로다",
+      "그가 너를 그의 깃으로 덮으시리니 네가 그의 날개 아래에 피하리로다 그의 진실함은 방패와 손 방패가 되시나니",
+      "너는 밤에 찾아오는 공포와 낮에 날아드는 화살과",
+      "어두울 때 퍼지는 전염병과 밝을 때 닥쳐오는 재앙을 두려워하지 아니하리로다",
+      "천 명이 네 왼쪽에서, 만 명이 네 오른쪽에서 엎드러지나 이 재앙이 네게 가까이 하지 못하리로다",
+      "오직 너는 목격하리로다 악인들의 보응이 네게 보임을 보리로다",
+      "여호와는 나의 피난처시라 네가 지존자를 너의 거처로 삼았으므로",
+      "화가 네게 미치지 못하며 재앙이 네 장막에 가까이 오지 못하리니",
+      "그가 너를 위하여 그의 천사들을 명령하사 네 모든 길에서 너를 지키게 하심이라",
+      "그들이 그들의 손으로 너를 붙들어 발이 돌에 부딪히지 아니하게 하리로다",
+      "네가 사자와 독사를 밟으며 젊은 사자와 뱀을 발로 누르리로다",
+      "하나님이 이르시되 그가 나를 사랑한즉 내가 그를 건지리라 그가 내 이름을 안즉 내가 그를 높이리라",
+      "그가 내게 간구하리니 내가 그에게 응답하리라 그들이 환난 당할 때에 내가 그와 함께 하여 그를 건지고 영화롭게 하리라",
+      "내가 그를 장수하게 함으로 그를 만족하게 하며 나의 구원을 그에게 보이리라 하시도다",
+    ]},
+    { ch: 103, title: "시편 103편", verses: [
+      "내 영혼아 여호와를 송축하라 내 속에 있는 것들아 다 그의 거룩한 이름을 송축하라",
+      "내 영혼아 여호와를 송축하며 그의 모든 은택을 잊지 말지어다",
+      "그가 네 모든 죄악을 사하시며 네 모든 병을 고치시며",
+      "네 생명을 파멸에서 속량하시고 인자와 긍휼로 관을 씌우시며",
+      "좋은 것으로 네 소원을 만족하게 하사 네 청춘을 독수리 같이 새롭게 하시는도다",
+      "여호와께서 공의로운 일을 행하시며 억압 당하는 모든 자를 위하여 정의를 행하시는도다",
+      "그의 행위를 모세에게, 그의 행사를 이스라엘 자손에게 알리셨도다",
+      "여호와는 자비로우시며 은혜로우시며 노하기를 더디 하시며 인자하심이 풍부하시도다",
+      "항상 경책하지 아니하시며 노를 영원히 품지 아니하시리로다",
+      "우리의 죄를 따라 우리를 처벌하지는 아니하시며 우리의 죄악을 따라 우리에게 그대로 갚지는 아니하셨으니",
+      "이는 하늘이 땅에서 높음 같이 그를 경외하는 자에게 그의 인자하심이 크심이로다",
+      "동이 서에서 먼 것 같이 우리의 죄과를 우리에게서 멀리 옮기셨으며",
+      "아버지가 자식을 긍휼히 여김 같이 여호와께서는 자기를 경외하는 자를 긍휼히 여기시나니",
+      "이는 그가 우리의 체질을 아시며 우리가 먼지임을 기억하심이로다",
+      "인생은 그 날이 풀과 같으며 그 영화가 들의 꽃과 같도다",
+      "그것은 바람이 지나가면 없어지나니 그 있던 자리도 다시 알지 못하거니와",
+      "여호와의 인자하심은 자기를 경외하는 자에게 영원부터 영원까지 이르며 그의 의는 자손의 자손에게 이르리니",
+      "곧 그의 언약을 지키고 그의 법도를 기억하여 행하는 자에게로다",
+      "여호와께서 그의 보좌를 하늘에 세우시고 그의 왕권으로 만유를 다스리시도다",
+      "능력이 있어 여호와의 말씀을 이루며 그의 말씀의 소리를 듣는 너희 천사들이여 여호와를 송축하라",
+      "그를 섬겨 그의 뜻을 행하는 너희 모든 천군이여 여호와를 송축하라",
+      "그가 다스리시는 모든 곳에서 여호와를 송축하라 내 영혼아 여호와를 송축하라",
+    ]},
+    { ch: 119, title: "시편 119편 (발췌)", verses: [
+      "행위가 온전하여 여호와의 율법을 따라가는 자들은 복이 있음이여",
+      "여호와의 증거들을 지키고 전심으로 여호와를 구하는 자들은 복이 있도다",
+      "참으로 그들은 불의를 행하지 아니하고 주의 도를 걷는도다",
+      "주께서 주의 법도를 명령하사 우리로 근실히 지키게 하셨나이다",
+      "내 길을 굳건하게 하사 주의 율례를 지키게 하소서",
+      "내가 주의 모든 계명에 주의할 때에는 부끄럽지 아니하리이다",
+      "내가 주의 의로운 판단을 배울 때에 정직한 마음으로 주께 감사하리이다",
+      "내가 주의 율례들을 지키오리니 나를 아주 버리지 마옵소서",
+      "청년이 무엇으로 그의 행실을 깨끗하게 하리이까 주의 말씀만 지킬 따름이니이다",
+      "내가 전심으로 주를 찾았사오니 주의 계명에서 떠나지 말게 하소서",
+      "내가 주께 범죄하지 아니하려 하여 주의 말씀을 내 마음에 두었나이다",
+      "여호와여 주는 찬송을 받으시옵소서 주의 율례들을 내게 가르치소서",
+      "주의 말씀은 내 발에 등이요 내 길에 빛이니이다",
+      "주의 의로운 규례들을 지키기로 맹세하고 굳게 정하였나이다",
+      "나는 심히 고통을 당하였나이다 여호와여 주의 말씀대로 나를 살아나게 하소서",
+    ]},
+    { ch: 139, title: "시편 139편", verses: [
+      "여호와여 주께서 나를 살펴 보셨으므로 나를 아시나이다",
+      "주께서 내가 앉고 일어섬을 아시고 멀리서도 나의 생각을 밝히 아시오며",
+      "나의 모든 길과 내가 눕는 것을 살펴 보셨으므로 나의 모든 행위를 익히 아시오니",
+      "여호와여 내 혀의 말을 알지 못하시는 것이 하나도 없으시니이다",
+      "주께서 나의 앞뒤를 둘러싸시고 내게 안수하셨나이다",
+      "이 지식이 내게 너무 기이하니 높아서 내가 능히 미치지 못하나이다",
+      "내가 주의 영을 떠나 어디로 가며 주의 앞에서 어디로 피하리이까",
+      "내가 하늘에 올라갈지라도 거기 계시며 스올에 내 자리를 펼지라도 거기 계시니이다",
+      "내가 새벽 날개를 치며 바다 끝에 가서 거주할지라도",
+      "거기서도 주의 손이 나를 인도하시며 주의 오른손이 나를 붙드시리이다",
+      "내가 혹시 말하기를 흑암이 반드시 나를 덮고 나를 두른 빛은 밤이 되리라 할지라도",
+      "주에게서는 흑암이 숨기지 못하며 밤이 낮과 같이 비추이나니 주에게는 흑암과 빛이 같음이니이다",
+      "주께서 내 내장을 지으시며 나의 모태에서 나를 만드셨나이다",
+      "내가 주께 감사하옴은 나를 지으심이 심히 기묘하심이라 주께서 하시는 일이 기이함을 내 영혼이 잘 아나이다",
+      "내가 은밀한 데서 지음을 받고 땅의 깊은 곳에서 기이하게 지음을 받은 때에 나의 형체가 주의 앞에 숨겨지지 못하였나이다",
+      "내 형질이 이루어지기 전에 주의 눈이 보셨으며 나를 위하여 정한 날이 하루도 되기 전에 주의 책에 다 기록이 되었나이다",
+      "하나님이여 주의 생각이 내게 어찌 그리 보배로우신지요 그 수가 어찌 그리 많은지요",
+      "내가 세려고 할지라도 그 수가 모래보다 많도소이다 내가 깰 때에도 내가 여전히 주와 함께 있나이다",
+      "하나님이여 주께서 반드시 악인을 죽이시리이다 피 흘리기를 즐기는 자들아 나를 떠날지어다",
+      "그들이 주를 대하여 악하게 말하며 주의 원수들이 주의 이름으로 헛되이 맹세하나이다",
+      "여호와여 내가 주를 미워하는 자들을 미워하지 아니하오며 주를 치러 일어나는 자들을 싫어하지 아니하나이까",
+      "내가 그들을 심히 미워하니 그들은 나의 원수들이니이다",
+      "하나님이여 나를 살피사 내 마음을 아시며 나를 시험하사 내 뜻을 아옵소서",
+      "내게 무슨 악한 행위가 있나 보시고 나를 영원한 길로 인도하소서",
+    ]},
+  ]
+};
+
+// ══════════════════════════
+// STATE
+// ══════════════════════════
+const KEY = 'bible-v3';
+function fresh() {
+  return { book: 'proverbs', chapIdx: { proverbs: 0, psalms: 0 }, done: { proverbs: {}, psalms: {} }, drafts: { proverbs: {}, psalms: {} }, streak: 0, lastDate: null };
+}
+
+// 로컬 저장 (오프라인 백업용)
+function saveLocal() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} }
+
+// Firebase + 로컬 동시 저장
+function save() {
+  saveLocal();
+  if (window._fbSave) window._fbSave(state);
+}
+
+let state = fresh();
+let syncScroll = true;
+
+// 앱 초기화 함수 (Firebase 인증 후 호출)
+window._initApp = function(cloudState) {
+  if (cloudState) {
+    state = cloudState;
+  } else {
+    // 클라우드 데이터 없으면 로컬 백업 시도
+    try { state = JSON.parse(localStorage.getItem(KEY)) || fresh(); } catch { state = fresh(); }
+  }
+  document.querySelector('.book-tab.' + state.book).classList.add('active');
+  if (state.book === 'psalms') {
+    document.querySelector('.book-tab.proverbs').classList.remove('active');
+  }
+  renderChapterList();
+  renderChapter();
+};
+
+function today() {
+  return new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' });
+}
+
+// ══════════════════════════
+// BOOK SWITCH
+// ══════════════════════════
+function setBook(b) {
+  state.book = b;
+  save();
+  document.querySelectorAll('.book-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector('.book-tab.' + b).classList.add('active');
+  renderChapterList();
+  renderChapter();
+}
+
+// ══════════════════════════
+// CHAPTER LIST
+// ══════════════════════════
+function renderChapterList() {
+  const b = state.book;
+  const chapters = BIBLE[b];
+  const list = document.getElementById('chapterList');
+  list.innerHTML = '';
+  chapters.forEach((ch, idx) => {
+    const done = !!state.done[b][idx];
+    const active = idx === state.chapIdx[b];
+    const item = document.createElement('div');
+    item.className = 'chapter-item' + (active ? ' active' : '');
+    item.dataset.done = done ? 'true' : 'false';
+    item.innerHTML = `
+      <span class="chapter-num">${ch.ch}</span>
+      <span class="chapter-name">${ch.title}</span>
+      <span class="chapter-done"></span>`;
+    item.onclick = () => { state.chapIdx[b] = idx; save(); renderChapterList(); renderChapter(); };
+    list.appendChild(item);
+  });
+  updateStats();
+}
+
+// ══════════════════════════
+// CHAPTER RENDER
+// ══════════════════════════
+function renderChapter() {
+  const b = state.book;
+  const isPsalms = b === 'psalms';
+  const chapters = BIBLE[b];
+  const idx = state.chapIdx[b];
+  const ch = chapters[idx];
+
+  // Header
+  document.getElementById('chapLabel').textContent = isPsalms ? 'PSALMS' : 'PROVERBS';
+  document.getElementById('chapLabel').className = 'chapter-label' + (isPsalms ? ' psalms' : '');
+  document.getElementById('chapTitle').textContent = ch.title;
+  document.getElementById('chapVerseCount').textContent = `${ch.verses.length}절`;
+
+  // Complete button
+  const isDone = !!state.done[b][idx];
+  const btn = document.getElementById('completeBtn');
+  btn.className = 'complete-btn ' + b + (isDone ? ' done' : '');
+  document.getElementById('completeBtnText').textContent = isDone ? '✓ 완료됨' : '장 완료';
+
+  // Nav
+  document.getElementById('prevChap').disabled = idx === 0;
+  document.getElementById('nextChap').disabled = idx === chapters.length - 1;
+
+  // Original verses
+  const orig = document.getElementById('originalVerses');
+  orig.innerHTML = '';
+  ch.verses.forEach((v, i) => {
+    const row = document.createElement('div');
+    row.className = 'verse-row';
+    row.innerHTML = `<span class="v-num${isPsalms ? ' psalms' : ''}">${i + 1}</span><span class="v-text">${v}</span>`;
+    orig.appendChild(row);
+  });
+
+  // Writing verses
+  const writing = document.getElementById('writingVerses');
+  writing.innerHTML = '';
+  const savedDrafts = state.drafts[b][idx] || {};
+  ch.verses.forEach((v, i) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'write-verse-row';
+    const ta = document.createElement('textarea');
+    ta.className = 'write-input' + (isPsalms ? ' psalms' : '');
+    ta.rows = 1;
+    ta.placeholder = `${i + 1}절을 필사하세요…`;
+    ta.value = savedDrafts[i] || '';
+    ta.dataset.verse = i;
+
+    // Auto resize
+    setTimeout(() => autoResize(ta), 0);
+    ta.addEventListener('input', () => {
+      autoResize(ta);
+      if (!state.drafts[b][idx]) state.drafts[b][idx] = {};
+      state.drafts[b][idx][i] = ta.value;
+      save();
+      updateVerseHighlight(b, idx);
+    });
+
+    // 포커스 시 해당 원문 절 active 표시
+    ta.addEventListener('focus', () => updateActiveVerse(i));
+    ta.addEventListener('blur',  () => updateActiveVerse(-1));
+
+    // Enter → 다음 절로 이동
+    // 쿨다운으로 IME 이중 발화 완전 차단
+    let moveLocked = false;
+    let enterPressed = false;
+
+    const tryMove = () => {
+      if (moveLocked) return;
+      moveLocked = true;
+      moveToNext(ta, b, idx, i);
+      setTimeout(() => { moveLocked = false; }, 300);
+    };
+
+    ta.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      if (e.isComposing || ta.dataset.composing === '1') {
+        enterPressed = true; // 조합 중 Enter → compositionend 후 이동
+      } else {
+        tryMove();
+      }
+    });
+
+    ta.addEventListener('compositionstart', () => { ta.dataset.composing = '1'; });
+    ta.addEventListener('compositionend', () => {
+      ta.dataset.composing = '0';
+      if (enterPressed) {
+        enterPressed = false;
+        requestAnimationFrame(tryMove); // 다음 프레임에 이동 (값 확정 후)
+      }
+    });
+
+    const numEl = document.createElement('div');
+    numEl.className = 'write-num';
+    numEl.textContent = `— ${i + 1}절`;
+
+    wrap.appendChild(numEl);
+    wrap.appendChild(ta);
+    writing.appendChild(wrap);
+  });
+
+  // Scroll to top
+  document.getElementById('paneOriginal').scrollTop = 0;
+  document.getElementById('paneWriting').scrollTop = 0;
+
+  // 저장된 필사 내용으로 초기 하이라이트 적용
+  updateVerseHighlight(b, idx);
+}
+
+function autoResize(ta) {
+  ta.style.height = 'auto';
+  ta.style.height = ta.scrollHeight + 'px';
+}
+
+function moveToNext(ta, b, chapIdx, verseIdx) {
+  const allInputs = document.querySelectorAll('.write-input');
+  const currentPos = Array.from(allInputs).indexOf(ta);
+  const nextTa = allInputs[currentPos + 1];
+
+  // 현재 절 끝 공백 추가
+  if (ta.value && !ta.value.endsWith(' ')) {
+    ta.value += ' ';
+    if (!state.drafts[b][chapIdx]) state.drafts[b][chapIdx] = {};
+    state.drafts[b][chapIdx][verseIdx] = ta.value;
+    save();
+    updateVerseHighlight(b, chapIdx);
+  }
+
+  if (nextTa) {
+    nextTa.focus();
+    const len = nextTa.value.length;
+    nextTa.setSelectionRange(len, len);
+    nextTa.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } else {
+    document.getElementById('completeBtn').focus();
+  }
+}
+
+// 원문 패널의 각 절 색상을 필사 진행도에 맞게 업데이트
+function updateVerseHighlight(b, chapIdx) {
+  const isPsalms = b === 'psalms';
+  const doneClass = isPsalms ? 'typed-psalms' : 'typed';
+  const drafts = state.drafts[b][chapIdx] || {};
+  const rows = document.querySelectorAll('#originalVerses .verse-row');
+  rows.forEach((row, i) => {
+    const text = (drafts[i] || '').trim();
+    row.classList.remove('typed', 'typed-psalms');
+    if (text.length > 0) row.classList.add(doneClass);
+  });
+}
+
+// 현재 포커스된 절을 원문에서 하이라이트
+function updateActiveVerse(verseIdx) {
+  const rows = document.querySelectorAll('#originalVerses .verse-row');
+  rows.forEach((row, i) => {
+    row.classList.toggle('active-verse', i === verseIdx);
+    // active 절이 원문 패널 안에서 보이도록 스크롤
+    if (i === verseIdx) {
+      row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  });
+}
+
+// ══════════════════════════
+// COMPLETE
+// ══════════════════════════
+function completeChapter() {
+  const b = state.book;
+  const idx = state.chapIdx[b];
+  const todayStr = today();
+
+  if (state.done[b][idx]) {
+    showToast('이미 완료된 장입니다 ✓');
+    return;
+  }
+
+  state.done[b][idx] = todayStr;
+
+  // Streak
+  const last = state.lastDate;
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+  const yStr = yesterday.toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' });
+  if (last === yStr) state.streak += 1;
+  else if (last !== todayStr) state.streak = 1;
+  state.lastDate = todayStr;
+
+  save();
+  renderChapterList();
+  renderChapter();
+  showToast('완료! 오늘도 말씀 필사를 마쳤습니다 🙏');
+}
+
+// ══════════════════════════
+// NAVIGATE CHAPTER
+// ══════════════════════════
+function moveChapter(dir) {
+  const b = state.book;
+  const len = BIBLE[b].length;
+  state.chapIdx[b] = Math.max(0, Math.min(len - 1, state.chapIdx[b] + dir));
+  save();
+  renderChapterList();
+  renderChapter();
+}
+
+// ══════════════════════════
+// SYNC SCROLL
+// ══════════════════════════
+const pOrig = document.getElementById('paneOriginal');
+const pWrite = document.getElementById('paneWriting');
+let syncing = false;
+
+pOrig.addEventListener('scroll', () => {
+  if (!syncScroll || syncing) return;
+  syncing = true;
+  const ratio = pOrig.scrollTop / (pOrig.scrollHeight - pOrig.clientHeight);
+  pWrite.scrollTop = ratio * (pWrite.scrollHeight - pWrite.clientHeight);
+  syncing = false;
+});
+
+pWrite.addEventListener('scroll', () => {
+  if (!syncScroll || syncing) return;
+  syncing = true;
+  const ratio = pWrite.scrollTop / (pWrite.scrollHeight - pWrite.clientHeight);
+  pOrig.scrollTop = ratio * (pOrig.scrollHeight - pOrig.clientHeight);
+  syncing = false;
+});
+
+// Toggle sync
+document.querySelector('.sync-toggle').addEventListener('click', () => {
+  syncScroll = !syncScroll;
+  document.getElementById('syncBox').textContent = syncScroll ? '✓' : '';
+  document.getElementById('syncBox').style.color = syncScroll ? 'var(--red)' : 'transparent';
+});
+
+// ══════════════════════════
+// STATS
+// ══════════════════════════
+function updateStats() {
+  const b = state.book;
+  const total = BIBLE[b].length;
+  const done = Object.keys(state.done[b]).length;
+  document.getElementById('statStreak').textContent = state.streak;
+  document.getElementById('statDone').textContent = done;
+  document.getElementById('statTotal').textContent = total;
+}
+
+// ══════════════════════════
+// TOAST
+// ══════════════════════════
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ══════════════════════════
+// RESET
+// ══════════════════════════
+function confirmReset() {
+  document.getElementById('resetModal').classList.add('show');
+}
+
+function closeModal() {
+  document.getElementById('resetModal').classList.remove('show');
+}
+
+function doReset() {
+  state = fresh();
+  save();
+  closeModal();
+  document.querySelector('.book-tab.proverbs').classList.add('active');
+  document.querySelector('.book-tab.psalms').classList.remove('active');
+  renderChapterList();
+  renderChapter();
+  showToast('초기화되었습니다. 새로 시작합니다 📖');
+}
+
+document.getElementById('resetModal').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closeModal();
+});
+
+// ══════════════════════════
+// INIT (Firebase 인증 후 _initApp 에서 처리)
+// ══════════════════════════
+</script>
+</body>
+</html>
