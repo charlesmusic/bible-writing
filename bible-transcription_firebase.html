@@ -1366,6 +1366,14 @@ ta.style.overflow = 'hidden';
       updateVerseHighlight(b, idx);
     });
 
+    ta.addEventListener('change', () => {
+      autoResize(ta);
+      if (!state.drafts[b][idx]) state.drafts[b][idx] = {};
+      state.drafts[b][idx][i] = ta.value;
+      save();
+      updateVerseHighlight(b, idx);
+    });
+
     // 포커스 시 해당 원문 절 active 표시
     ta.addEventListener('focus', () => updateActiveVerse(i));
     ta.addEventListener('blur',  () => updateActiveVerse(-1));
