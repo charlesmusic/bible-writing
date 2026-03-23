@@ -1248,6 +1248,22 @@ function save() {
 let state = fresh();
 let syncScroll = true;
 
+  // 자동 저장 (3초마다)
+setInterval(() => {
+  const inputs = document.querySelectorAll('.write-input');
+  const b = state.book;
+  const idx = state.chapIdx[b];
+  let changed = false;
+  inputs.forEach((ta, i) => {
+    if (!state.drafts[b][idx]) state.drafts[b][idx] = {};
+    if (state.drafts[b][idx][i] !== ta.value) {
+      state.drafts[b][idx][i] = ta.value;
+      changed = true;
+    }
+  });
+  if (changed) save();
+}, 3000);
+
 // 앱 초기화 함수 (Firebase 인증 후 호출)
 window._initApp = function(cloudState) {
   if (cloudState) {
