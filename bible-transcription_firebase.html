@@ -1488,8 +1488,12 @@ function completeChapter() {
   const idx = state.chapIdx[b];
   const todayStr = today();
 
-  if (state.done[b][idx]) {
-    showToast('이미 완료된 장입니다 ✓');
+ if (state.done[b][idx]) {
+    state.done[b][idx] = null;
+    save();
+    renderChapterList();
+    renderChapter();
+    showToast('완료가 취소되었습니다. 수정 후 다시 완료하세요 ✏️');
     return;
   }
 
